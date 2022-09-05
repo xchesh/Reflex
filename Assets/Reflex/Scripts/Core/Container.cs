@@ -24,10 +24,30 @@ namespace Reflex
             Disposables.TryAdd(disposable);
         }
 
-        public T Instantiate<T>(T original) where T : Component
+        public MonoBehaviour InjectMono(MonoBehaviour instance)
         {
-            var instance = UnityEngine.Object.Instantiate<T>(original);
-            instance.GetComponentsInChildren<MonoBehaviour>().ForEach(mb => MonoInjector.Inject(mb, this));
+            MonoInjector.Inject(instance, this);
+            return instance;
+        }
+
+        public T Instantiate<T>(T original, Transform container = null) where T : Component
+        {
+            var instance = UnityEngine.Object.Instantiate<T>(original,  container);
+            InjectMonoBehaviour(instance);
+            return instance;
+        }
+
+        public T Instantiate<T>(T original, Transform container, bool worldPositionStays) where T : Component
+        {
+            var instance = UnityEngine.Object.Instantiate<T>(original,  container, worldPositionStays);
+            InjectMonoBehaviour(instance);
+            return instance;
+        }
+
+        public T Instantiate<T>(T original, Vector3 position, Quaternion rotation, Transform container = null) where T : Component
+        {
+            var instance = UnityEngine.Object.Instantiate<T>(original, position, rotation, container);
+            InjectMonoBehaviour(instance);
             return instance;
         }
 
@@ -42,7 +62,7 @@ namespace Reflex
         {
             return ConstructorInjector.ConstructAndInject<T>(this);
         }
-        
+
         public object Construct(Type concrete)
         {
             return ConstructorInjector.ConstructAndInject(concrete, this);
@@ -57,7 +77,7 @@ namespace Reflex
         {
             return new BindingContractDefinition<TContract>(this);
         }
-        
+
         public BindingGenericContractDefinition BindGenericContract(Type genericContract)
         {
             return new BindingGenericContractDefinition(genericContract, this);
@@ -84,7 +104,7 @@ namespace Reflex
                 Concrete = instance.GetType(),
                 Scope = BindingScope.SingletonLazy
             };
-            
+
             Bindings.Add(contract, binding);
             Singletons.Add(contract, instance);
         }
@@ -105,7 +125,7 @@ namespace Reflex
             var contract = genericContract.MakeGenericType(genericConcrete);
             return (TCast) Resolve(contract);
         }
-        
+
         private Resolver MatchResolver(Type contract)
         {
             if (Bindings.TryGetValue(contract, out var binding))
@@ -123,6 +143,11 @@ namespace Reflex
             throw new UnknownContractException(contract);
         }
 
+        private void InjectMonoBehaviour<T>(T instance) where T : Component
+        {
+            instance.GetComponentsInChildren<MonoBehaviour>().ForEach(mb => MonoInjector.Inject(mb, this));
+        }
+        
         internal Type GetConcreteTypeFor(Type contract)
         {
             return Bindings[contract].Concrete;
@@ -153,7 +178,7 @@ namespace Reflex
             method = null;
             return false;
         }
-        
+
         internal void InstantiateNonLazySingletons()
         {
             _singletonNonLazyResolver = new SingletonLazyResolver();
@@ -163,6 +188,7 @@ namespace Reflex
             {
                 Resolve(binding.Contract);
             }
+
             _singletonNonLazyResolver = new SingletonNonLazyResolver();
         }
 
