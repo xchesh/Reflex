@@ -19,6 +19,14 @@ namespace Reflex
         private readonly Resolver _transientResolver = new TransientResolver();
         private readonly Resolver _singletonLazyResolver = new SingletonLazyResolver();
 
+        private readonly GameObject _tempRoot;
+
+        public Container()
+        {
+            _tempRoot = new GameObject("Container");
+            _tempRoot.SetActive(false);
+        }
+
         public void AddDisposable(IDisposable disposable)
         {
             Disposables.TryAdd(disposable);
@@ -32,23 +40,17 @@ namespace Reflex
 
         public T Instantiate<T>(T original, Transform container = null) where T : Component
         {
-            var instance = UnityEngine.Object.Instantiate<T>(original,  container);
-            InjectMonoBehaviour(instance);
-            return instance;
+            return Instantiate_Internal(original, container, (parent) => UnityEngine.Object.Instantiate<T>(original, parent));
         }
 
         public T Instantiate<T>(T original, Transform container, bool worldPositionStays) where T : Component
         {
-            var instance = UnityEngine.Object.Instantiate<T>(original,  container, worldPositionStays);
-            InjectMonoBehaviour(instance);
-            return instance;
+            return Instantiate_Internal(original, container, (parent) => UnityEngine.Object.Instantiate<T>(original, parent, worldPositionStays));
         }
 
         public T Instantiate<T>(T original, Vector3 position, Quaternion rotation, Transform container = null) where T : Component
         {
-            var instance = UnityEngine.Object.Instantiate<T>(original, position, rotation, container);
-            InjectMonoBehaviour(instance);
-            return instance;
+            return Instantiate_Internal(original, container, (parent) => UnityEngine.Object.Instantiate<T>(original, position, rotation, parent));
         }
 
         public GameObject Instantiate(GameObject original)
@@ -141,6 +143,29 @@ namespace Reflex
             }
 
             throw new UnknownContractException(contract);
+        }
+
+        private T Instantiate_Internal<T>(T original, Transform container, Func<Transform, T> instantiate) where T : Component
+        {
+            var parent = container;
+            var prefabWasActive = original.gameObject.activeSelf;
+
+            if (prefabWasActive)
+                parent = _tempRoot.transform;
+
+            var instance = instantiate.Invoke(parent);
+
+            if (prefabWasActive)
+                instance.gameObject.SetActive(false);
+
+            if (instance.transform.parent != container)
+                instance.transform.SetParent(container, false);
+
+            InjectMonoBehaviour(instance);
+
+            instance.gameObject.SetActive(prefabWasActive);
+
+            return instance;
         }
 
         private void InjectMonoBehaviour<T>(T instance) where T : Component

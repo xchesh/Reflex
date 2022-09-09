@@ -9,6 +9,14 @@ namespace Reflex.Scripts.Core
     {
         private readonly Stack<Container> _stack = new Stack<Container>();
 
+        private readonly GameObject _tempRoot;
+
+        public ContainerStack()
+        {
+            _tempRoot = new GameObject("Container Stack");
+            _tempRoot.SetActive(false);
+        }
+
         internal Container PushNew()
         {
             var container = new Container();
@@ -43,23 +51,17 @@ namespace Reflex.Scripts.Core
 
         public T Instantiate<T>(T original, Transform container = null) where T : Component
         {
-            var instance = UnityEngine.Object.Instantiate<T>(original, container);
-            InjectMonoBehaviour(instance);
-            return instance;
+            return Instantiate_Internal(original, container, (parent) => UnityEngine.Object.Instantiate<T>(original, parent));
         }
 
         public T Instantiate<T>(T original, Transform container, bool worldPositionStays) where T : Component
         {
-            var instance = UnityEngine.Object.Instantiate<T>(original, container, worldPositionStays);
-            InjectMonoBehaviour(instance);
-            return instance;
+            return Instantiate_Internal(original, container, (parent) => UnityEngine.Object.Instantiate<T>(original, parent, worldPositionStays));
         }
 
         public T Instantiate<T>(T original, Vector3 position, Quaternion rotation, Transform container = null) where T : Component
         {
-            var instance = UnityEngine.Object.Instantiate<T>(original, position, rotation, container);
-            InjectMonoBehaviour(instance);
-            return instance;
+            return Instantiate_Internal(original, container, (parent) => UnityEngine.Object.Instantiate<T>(original, position, rotation, parent));
         }
 
         public GameObject Instantiate(GameObject original)
@@ -123,6 +125,29 @@ namespace Reflex.Scripts.Core
         public void BindSingleton<TContract>(TContract instance)
         {
             _stack.Peek().BindSingleton<TContract>(instance);
+        }
+
+        private T Instantiate_Internal<T>(T original, Transform container, Func<Transform, T> instantiate) where T : Component
+        {
+            var parent = container;
+            var prefabWasActive = original.gameObject.activeSelf;
+
+            if (prefabWasActive)
+                parent = _tempRoot.transform;
+
+            var instance = instantiate.Invoke(parent);
+
+            if (prefabWasActive)
+                instance.gameObject.SetActive(false);
+
+            if (instance.transform.parent != container)
+                instance.transform.SetParent(container, false);
+
+            InjectMonoBehaviour(instance);
+
+            instance.gameObject.SetActive(prefabWasActive);
+
+            return instance;
         }
 
         private void InjectMonoBehaviour<T>(T instance) where T : Component
